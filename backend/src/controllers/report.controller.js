@@ -17,8 +17,10 @@ const getReportDetail = asyncHandler(async (req, res) => {
 });
 
 const reviewReport = asyncHandler(async (req, res) => {
-  const result = await reportService.reviewReport(req.params.reportId, req.user.sub, req.body);
-  res.status(200).json({ success: true, message: 'ประเมินรายงานสำเร็จ', data: result });
+  const { reportId } = req.params;
+  const { severity, adminNote } = req.body;
+  const result = await reportService.reviewReport(reportId, req.user.sub, { severity, adminNote });
+  res.status(200).json({ success: true, message: 'รีวิวรายงานสำเร็จ', data: result });
 });
 
 const sendWarningMessage = asyncHandler(async (req, res) => {

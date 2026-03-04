@@ -13,7 +13,6 @@ const reportRoutes = require('./report.routes');
 const paymentRoutes = require('./payment.routes');
 const driverRoutes = require('./driver.routes'); 
 
-
 const router = express.Router();
 
 router.use('/auth', authRoutes);

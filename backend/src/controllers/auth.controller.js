@@ -17,6 +17,11 @@ const login = asyncHandler(async (req, res) => {
         throw new ApiError(401, "Your account has been deactivated.");
     }
 
+    // ✅ เช็ค blacklist
+    if (user && user.isBlacklisted) {
+        throw new ApiError(403, "Your account has been banned and cannot login.");
+    }
+
     const passwordIsValid = user ? await userService.comparePassword(user, password) : false;
     if (!user || !passwordIsValid) {
         throw new ApiError(401, "Invalid credentials");

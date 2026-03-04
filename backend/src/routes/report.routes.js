@@ -6,12 +6,15 @@ const { createReportSchema, reviewReportSchema, sendWarningSchema, listReportsQu
 
 const router = express.Router();
 
+// บัญชีดำ routes - ต้องอยู่ก่อน :reportId
+router.get('/blacklist', protect, requireAdmin, reportController.getBlacklistedUsers);
+router.delete('/blacklist/:userId', protect, requireAdmin, reportController.removeBlacklist);
+
+// Report routes
 router.post('/', protect, validate(createReportSchema), reportController.submitReport);
 router.get('/', protect, requireAdmin, validate(listReportsQuerySchema), reportController.listReports);
 router.get('/:reportId', protect, requireAdmin, reportController.getReportDetail);
 router.patch('/:reportId/review', protect, requireAdmin, validate(reviewReportSchema), reportController.reviewReport);
 router.post('/:reportId/send-warning', protect, requireAdmin, validate(sendWarningSchema), reportController.sendWarningMessage);
-router.get('/admin/blacklist/users', protect, requireAdmin, reportController.getBlacklistedUsers);
-router.patch('/admin/:userId/remove-blacklist', protect, requireAdmin, reportController.removeBlacklist);
 
 module.exports = router;

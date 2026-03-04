@@ -102,6 +102,7 @@ model User {
   driverProfile     DriverProfile?
 
   reportsSubmitted  Report[] @relation("ReportedByUser")
+  adminBlacklists   BlacklistedNationalId[] @relation("AdminBlacklists")
   reportsReceived   Report[] @relation("ReportedUser")
   adminReports      Report[] @relation("AdminReports")
 
@@ -313,4 +314,18 @@ model DriverProfile {
   updatedAt         DateTime  @updatedAt
 
   @@index([userId])
+}
+
+model BlacklistedNationalId {
+  id                String   @id @default(cuid())
+  nationalIdNumber  String   @unique
+  reason            String?
+  severity          String   @default("warning")
+  adminId           String
+  admin             User     @relation("AdminBlacklists", fields: [adminId], references: [id], onDelete: Restrict)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([nationalIdNumber])
+  @@index([adminId])
 }

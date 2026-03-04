@@ -34,25 +34,57 @@ const getReportDetail = async (reportId) => {
 };
 
 const reviewReport = async (reportId, adminId, { severity, adminNote }) => {
-  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  const blacklistService = require('./blacklist.service');
+  const report = await prisma.report.findUnique({ 
+    where: { id: reportId },
+    include: { reportedUser: true }
+  });
   if (!report) throw new ApiError(404, 'ไม่พบรายงาน');
+  
   const updatedReport = await prisma.report.update({
     where: { id: reportId },
     data: { status: 'reviewed', severity, adminId, adminNote, resolvedAt: new Date() }
   });
-  if (severity === 'blacklist') {
-    await prisma.user.update({
-      where: { id: report.reportedUserId },
-      data: { isBlacklisted: true, blacklistReason: adminNote, blacklistedAt: new Date() }
-    });
+
+  if (severity === 'warning') {
+    // ⚠️ ส่งข้อความเตือน
     await notifService.createNotificationByAdmin({
       userId: report.reportedUserId,
-      type: 'account_banned',
-      title: 'บัญชีของคุณถูกแบน',
-      message: `บัญชีของคุณถูกแบน: ${adminNote || 'ไม่มีการระบุเหตุผล'}`,
+      type: 'REPORT_WARNING',
+      title: '⚠️ ได้รับข้อความเตือน',
+      body: adminNote || 'คุณได้รับการเตือนจากระบบ',
+      relatedId: reportId
+    });
+  } else if (severity === 'blacklist') {
+    // 🚫 แบนบัญชี
+    
+    // เพิ่มเลขบัตรเข้าบัญชีดำ
+    await blacklistService.blacklistNationalId(
+      report.reportedUser.nationalIdNumber,
+      adminId,
+      { reason: adminNote, severity: 'blacklist' }
+    );
+
+    // ปิดใช้งานบัญชี
+    await prisma.user.update({
+      where: { id: report.reportedUserId },
+      data: {
+        isBlacklisted: true,
+        blacklistReason: adminNote,
+        blacklistedAt: new Date()
+      }
+    });
+
+    // ส่งแจ้งเตือนบัญชีแบน
+    await notifService.createNotificationByAdmin({
+      userId: report.reportedUserId,
+      type: 'ACCOUNT_BANNED',
+      title: '❌ บัญชีของคุณถูกแบน',
+      body: `เหตุผล: ${adminNote || 'ไม่มีการระบุเหตุผล'}`,
       relatedId: reportId
     });
   }
+
   return updatedReport;
 };
 
@@ -71,23 +103,65 @@ const sendWarningMessage = async (reportId, adminId, { subject, message }) => {
 
 const getBlacklistedUsers = async ({ page = 1, limit = 10 }) => {
   const skip = (page - 1) * limit;
-  const [blacklistedUsers, total] = await Promise.all([
-    prisma.user.findMany({
-      where: { isBlacklisted: true },
+  const [blacklistedNationalIds, total] = await Promise.all([
+    prisma.blacklistedNationalId.findMany({
       skip, take: parseInt(limit),
-      select: { id: true, username: true, firstName: true, lastName: true, email: true, nationalId: true, blacklistReason: true, blacklistedAt: true },
-      orderBy: { blacklistedAt: 'desc' }
+      include: {
+        admin: { select: { id: true, username: true, email: true } }
+      },
+      orderBy: { createdAt: 'desc' }
     }),
-    prisma.user.count({ where: { isBlacklisted: true } })
+    prisma.blacklistedNationalId.count()
   ]);
-  return { data: blacklistedUsers, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } };
+  
+  // ดึง user info จาก nationalIdNumber
+  const usersData = await Promise.all(
+    blacklistedNationalIds.map(ban => 
+      prisma.user.findFirst({
+        where: { nationalIdNumber: ban.nationalIdNumber },
+        select: { id: true, username: true, email: true, firstName: true, lastName: true }
+      })
+    )
+  );
+
+  const data = blacklistedNationalIds.map((ban, idx) => ({
+    id: usersData[idx]?.id || ban.id,
+    username: usersData[idx]?.username || '-',
+    email: usersData[idx]?.email || '-',
+    firstName: usersData[idx]?.firstName || '-',
+    lastName: usersData[idx]?.lastName || '-',
+    nationalIdNumber: ban.nationalIdNumber,
+    blacklistReason: ban.reason,
+    blacklistedAt: ban.createdAt,
+    admin: ban.admin
+  }));
+
+  return { data, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) } };
 };
 
 const removeBlacklist = async (userId) => {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { isBlacklisted: false, blacklistReason: null, blacklistedAt: null }
+  // หา user ที่จะ unban
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new ApiError(404, 'ไม่พบผู้ใช้');
+
+  // ลบจาก BlacklistedNationalId table
+  const deleted = await prisma.blacklistedNationalId.deleteMany({
+    where: { nationalIdNumber: user.nationalIdNumber }
   });
+
+  // Update User flag ถ้าไม่มี blacklist records อื่นแล้ว
+  const stillBlacklisted = await prisma.blacklistedNationalId.findFirst({
+    where: { nationalIdNumber: user.nationalIdNumber }
+  });
+
+  if (!stillBlacklisted) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isBlacklisted: false, blacklistReason: null, blacklistedAt: null }
+    });
+  }
+
+  return { deletedCount: deleted.count };
 };
 
 module.exports = {
