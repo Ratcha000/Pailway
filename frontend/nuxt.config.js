@@ -17,7 +17,7 @@ export default defineNuxtConfig({
     public: {
       apiBase:
         process.env.NUXT_PUBLIC_API_BASE_URL ||
-        "https://painamnaewebappsec3-3-production.up.railway.app/api",
+        "https://pailway-production.up.railway.app/api",
       googleMapsApiKey:
         process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""
     }
