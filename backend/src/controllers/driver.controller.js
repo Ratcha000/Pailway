@@ -1,6 +1,8 @@
 const prisma = require('../utils/prisma');
 const ApiError = require('../utils/ApiError');
 const { uploadToCloudinary } = require('../utils/cloudinary');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * POST /api/driver/qr-code
@@ -24,18 +26,36 @@ exports.uploadQRCode = async (req, res) => {
     let qrCodeUrl = null;
     let bankInfo = null;
 
-    // ✅ อัปโหลด QR Code ไป Cloudinary
+    // ✅ อัปโหลด QR Code ไป Cloudinary    
     if (paymentMethod === 'promptpay' && req.file) {
       try {
+        
+        const fileBuffer = fs.readFileSync(req.file.path);
+        
+        if (!fileBuffer || fileBuffer.length === 0) {
+          throw new ApiError(400, 'ไฟล์ QR Code ว่างเปล่า');
+        }
+
         const { url } = await uploadToCloudinary(
-          req.file.buffer,
+          fileBuffer,
           `driver_qr_codes/${driverId}`
         );
         qrCodeUrl = url;
         console.log('QR Code URL:', qrCodeUrl);
+
+        
+        fs.unlink(req.file.path, (err) => {
+          if (err) console.error('Error deleting temp file:', err);
+        });
       } catch (err) {
         console.error('Cloudinary upload error:', err);
-        throw new ApiError(500, 'ไม่สามารถอัปโหลด QR Code ได้');
+        
+        if (req.file && req.file.path) {
+          fs.unlink(req.file.path, (err) => {
+            if (err) console.error('Error deleting temp file:', err);
+          });
+        }
+        throw new ApiError(err.statusCode || 500, err.message || 'ไม่สามารถอัปโหลด QR Code ได้');
       }
     }
 
