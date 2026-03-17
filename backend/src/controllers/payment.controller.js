@@ -53,16 +53,19 @@ exports.getPaymentsForPassenger = async (req, res) => {
         booking: {
           include: {
             route: {
-              select: { 
-                id: true, startLocation: true, endLocation: true, 
-                pricePerSeat: true, departureTime: true, status: true,
-                distance: true, duration: true
+              include: {
+                vehicle: {
+                  select: { licensePlate: true }
+                }
               }
             }
           }
         },
         driver: {
           select: { id: true, firstName: true, lastName: true, email: true }
+        },
+        passenger: {
+          select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true }
         }
       },
       orderBy: { createdAt: 'desc' }

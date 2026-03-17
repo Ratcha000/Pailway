@@ -206,6 +206,18 @@
               ใบเสร็จรับเงิน
             </button>
 
+            <!-- Download Tax Invoice Button -->
+            <button
+              v-if="payment.status === 'approved' || payment.verificationStatus === 'approved'"
+              @click="downloadTaxInvoice(payment)"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              ใบกำกับภาษีแบบย่อ
+            </button>
+
             <!-- Re-upload if rejected -->
             <button
               v-if="payment.verificationStatus === 'rejected' && payment.status !== 'pending'"
@@ -313,9 +325,18 @@ const openReceipt = (url) => {
 
 const downloadReceipt = (payment) => {
   const receiptNumber = `RCP-${payment.id?.substring(0, 8).toUpperCase() || 'XXXXXXXX'}`
-  const passenger = payment.passenger || user.value || {}
   const route = payment.booking?.route || {}
   const driver = payment.driver || {}
+  const passenger = payment.passenger || {}
+
+  // ✅ ดึงข้อมูลจาก payment.passenger (API ส่งมา)
+  const passengerName = `${passenger.firstName || user.value?.firstName || '-'} ${passenger.lastName || user.value?.lastName || ''}`.trim()
+  const passengerEmail = passenger.email || user.value?.email || '-'
+  const passengerPhone = passenger.phoneNumber || user.value?.phoneNumber || '-'
+
+  // ✅ ดึงทะเบียนรถจาก payment.booking.route.vehicle.licensePlate
+  const licensePlate = payment.booking?.route?.vehicle?.licensePlate || '-'
+
   const startLocation = route.startLocation?.name || route.startLocation || 'N/A'
   const endLocation = route.endLocation?.name || route.endLocation || 'N/A'
   const paymentMethodMap = {
@@ -456,7 +477,7 @@ const downloadReceipt = (payment) => {
         </div>
         <div class="info-item">
           <span class="info-label">ทะเบียนรถ / License Plate</span>
-          <span class="info-value">${driver.licensePlate || '-'}</span>
+          <span class="info-value">${licensePlate || '-'}</span>
         </div>
       </div>
     </div>
@@ -491,6 +512,210 @@ const downloadReceipt = (payment) => {
 </html>`
 
   const win = window.open('', '_blank', 'width=700,height=900')
+  win.document.write(html)
+  win.document.close()
+}
+
+
+
+
+const downloadTaxInvoice = (payment) => {
+  const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${payment.id?.substring(0, 5).toUpperCase() || 'XXXXX'}`
+  const route = payment.booking?.route || {}
+  const passenger = payment.passenger || {}
+  const driver = payment.driver || {}
+
+  const startLocation = route.startLocation?.name || 'N/A'
+  const endLocation = route.endLocation?.name || 'N/A'
+  
+  // คำนวณภาษี
+  const baseAmount = Math.round(payment.amount / 1.07 * 100) / 100
+  const vatAmount = Math.round((payment.amount - baseAmount) * 100) / 100
+  
+  const formatDateShort = (date) => {
+    if (!date) return 'DD/MM/YY'
+    const d = new Date(date)
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
+  }
+
+  const convertNumberToThaiText = (num) => {
+    const thaiNumbers = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า']
+    const units = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน']
+    
+    if (num === 0) return 'ศูนย์บาท'
+    
+    let result = ''
+    let unitIndex = 0
+    const numStr = Math.floor(num).toString().split('').reverse().join('')
+    
+    for (let i = 0; i < numStr.length; i++) {
+      const digit = parseInt(numStr[i])
+      if (digit !== 0) {
+        if (i === 1 && digit === 1) {
+          result = 'สิบ' + result
+        } else {
+          result = thaiNumbers[digit] + units[i] + result
+        }
+      }
+      unitIndex++
+    }
+    
+    return result + 'บาทถ้วน'
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ใบกำกับภาษีอย่างย่อ ${invoiceNumber}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Sarabun', sans-serif; background: #f5f5f5; padding: 20px; }
+    .invoice { width: 210mm; margin: 0 auto; background: white; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    
+    .header-section { text-align: center; margin-bottom: 20px; border-bottom: 2px dashed #333; padding-bottom: 15px; }
+    .company-name { font-size: 18px; font-weight: 700; margin-bottom: 5px; }
+    .company-info { font-size: 12px; color: #666; line-height: 1.4; margin-bottom: 10px; }
+    .tax-info { font-size: 11px; color: #666; }
+    
+    .invoice-title { font-size: 20px; font-weight: 700; text-align: center; margin: 15px 0; }
+    
+    .invoice-meta { display: flex; justify-content: space-between; margin: 15px 0; font-size: 12px; padding: 0 10px; border-bottom: 1px dashed #999; padding-bottom: 10px; }
+    .meta-item { display: flex; gap: 20px; }
+    .meta-label { font-weight: 600; width: 80px; }
+    
+    .items-table { width: 100%; margin: 15px 0; border-collapse: collapse; }
+    .items-table th { background: #f0f0f0; border: 1px solid #ddd; padding: 8px; font-size: 12px; font-weight: 600; text-align: left; }
+    .items-table td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
+    .items-table .text-center { text-align: center; }
+    .items-table .text-right { text-align: right; }
+    
+    .summary-section { margin: 15px 0; }
+    .summary-row { display: flex; justify-content: flex-end; gap: 10px; margin: 5px 0; font-size: 12px; }
+    .summary-label { width: 150px; text-align: right; }
+    .summary-value { width: 100px; text-align: right; }
+    
+    .total-row { display: flex; justify-content: flex-end; gap: 10px; margin: 8px 0; font-weight: 700; font-size: 14px; padding: 8px; background: #f9f9f9; border: 2px solid #333; }
+    .total-label { width: 150px; text-align: right; }
+    .total-value { width: 100px; text-align: right; }
+    
+    .amount-words { margin: 15px 10px; font-size: 12px; padding: 8px; background: #fafafa; border-left: 3px solid #333; }
+    .amount-words-label { font-weight: 600; font-size: 11px; }
+    .amount-words-text { font-size: 12px; margin-top: 3px; }
+    
+    .footer { text-align: center; font-size: 10px; color: #999; margin-top: 20px; border-top: 1px dashed #999; padding-top: 10px; }
+    
+    .divider { border-bottom: 1px dashed #999; margin: 10px 0; }
+    
+    @media print {
+      body { background: white; padding: 0; }
+      .invoice { box-shadow: none; width: 100%; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice">
+    <!-- HEADER -->
+    <div class="header-section">
+      <div class="company-name">บริษัท ไพนำแน จำกัด</div>
+      <div class="company-info">
+        <div>เลขที่ 123 ซอยลาศ แขวงลาศ เขตปทุมวัน กรุงเทพมหานคร 10110</div>
+        <div>โทรศัพท์: 02-1234-5678</div>
+      </div>
+      <div class="tax-info">
+        <div>เลขประจำตัวผู้เสียภาษี: 0123456789012 | สาขาที่ 00001</div>
+      </div>
+    </div>
+
+    <!-- TITLE -->
+    <div class="invoice-title">ใบกำกับภาษีอย่างย่อ</div>
+    <div class="divider"></div>
+
+    <!-- META INFO -->
+    <div class="invoice-meta">
+      <div class="meta-item">
+        <div><span class="meta-label">วันที่:</span> ${formatDateShort(payment.createdAt)}</div>
+      </div>
+      <div class="meta-item">
+        <div><span class="meta-label">เลขที่:</span> ${invoiceNumber}</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <!-- ITEMS TABLE -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 50%;">รายการ</th>
+          <th style="width: 12%;" class="text-center">จำนวน</th>
+          <th style="width: 15%;" class="text-right">ราคา</th>
+          <th style="width: 10%;" class="text-right">ส่วนลด</th>
+          <th style="width: 13%;" class="text-right">รวม</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ค่าบริการรับส่ง (${startLocation} → ${endLocation})</td>
+          <td class="text-center">1</td>
+          <td class="text-right">${baseAmount.toFixed(2)}</td>
+          <td class="text-right">-</td>
+          <td class="text-right">${baseAmount.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- SUMMARY -->
+    <div class="summary-section">
+      <div class="summary-row">
+        <div class="summary-label">เงินรวมก่อนภาษี:</div>
+        <div class="summary-value">${baseAmount.toFixed(2)}</div>
+      </div>
+      <div class="summary-row">
+        <div class="summary-label">ภาษีมูลค่าเพิ่ม 7.00%:</div>
+        <div class="summary-value">${vatAmount.toFixed(2)}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="total-row">
+        <div class="total-label">ยอดรวมทั้งสิ้น:</div>
+        <div class="total-value">${payment.amount.toFixed(2)}</div>
+      </div>
+    </div>
+
+    <!-- AMOUNT IN WORDS -->
+    <div class="amount-words">
+      <div class="amount-words-label">จำนวนเงิน(ตัวอักษร):</div>
+      <div class="amount-words-text">${convertNumberToThaiText(payment.amount)}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- PAYMENT INFO -->
+    <div class="invoice-meta" style="border: none; padding: 10px 0;">
+      <div class="meta-item">
+        <div><span class="meta-label">ชื่อผู้ซื้อ:</span> ${passenger.firstName || '-'} ${passenger.lastName || ''}</div>
+      </div>
+      <div class="meta-item">
+        <div><span class="meta-label">วิธีชำระ: </span>โอนเงิน</div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <p>เอกสารนี้ออกโดยระบบอัตโนมัติ</p>
+      <p>วันที่พิมพ์: ${new Date().toLocaleDateString('th-TH')}</p>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() { 
+      window.print(); 
+    }
+  <\/script>
+</body>
+</html>`
+
+  const win = window.open('', '_blank', 'width=800,height=1000')
   win.document.write(html)
   win.document.close()
 }
