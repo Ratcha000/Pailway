@@ -60,7 +60,9 @@ enum NotificationType {
   ROUTE
   REPORT_WARNING   
   ACCOUNT_BANNED 
-  PAYMENT_VERIFICATION  
+  PAYMENT_VERIFICATION
+  REPORT_UPDATE 
+  INCIDENT  
 }
 
 model User {
@@ -108,6 +110,8 @@ model User {
 
   driverPayments    Payment[]   @relation("DriverPayments")
   passengerPayments Payment[]   @relation("PassengerPayments")
+
+  incidents Incident[]
 
   @@index([role])
   @@index([isActive])
@@ -328,4 +332,15 @@ model BlacklistedNationalId {
 
   @@index([nationalIdNumber])
   @@index([adminId])
+}
+
+// pbl no6
+model Incident {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  status      String   @default("PENDING")
+  userId      String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
 }

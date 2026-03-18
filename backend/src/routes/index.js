@@ -10,6 +10,9 @@ const mapRoutes = require('./maps.routes')
 //add sprint 2
 const reportRoutes = require('./report.routes');
 
+//add sprint 3
+const incidentRoutes = require('./incident.route')
+
 const paymentRoutes = require('./payment.routes');
 const driverRoutes = require('./driver.routes'); 
 
@@ -27,5 +30,8 @@ router.use('/api/maps', mapRoutes);
 router.use('/reports', reportRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/driver', driverRoutes);
+
+router.use('/incidents', incidentRoutes);
+
 
 module.exports = router;

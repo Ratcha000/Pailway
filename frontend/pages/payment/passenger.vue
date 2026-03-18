@@ -520,10 +520,22 @@ const downloadReceipt = (payment) => {
 
 
 const downloadTaxInvoice = (payment) => {
+  // Invoice number: ใช้ ID เป็น sequential (ในส่วนที่ 5 ตัวสุดท้าย)
   const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${payment.id?.substring(0, 5).toUpperCase() || 'XXXXX'}`
+  
   const route = payment.booking?.route || {}
   const passenger = payment.passenger || {}
   const driver = payment.driver || {}
+  
+  // Mapping วิธีการชำระ
+  const paymentMethodMap = {
+    'bank_transfer': 'โอนผ่านธนาคาร',
+    'qr_code': 'QR Code (PromptPay)',
+    'cash': 'เงินสด',
+    'promptpay': 'PromptPay',
+    'mobile_wallet': 'Mobile Wallet'
+  }
+  const methodDisplay = paymentMethodMap[payment.paymentMethod] || payment.paymentMethod || 'โอนเงิน'
 
   const startLocation = route.startLocation?.name || 'N/A'
   const endLocation = route.endLocation?.name || 'N/A'
@@ -696,7 +708,7 @@ const downloadTaxInvoice = (payment) => {
         <div><span class="meta-label">ชื่อผู้ซื้อ:</span> ${passenger.firstName || '-'} ${passenger.lastName || ''}</div>
       </div>
       <div class="meta-item">
-        <div><span class="meta-label">วิธีชำระ: </span>โอนเงิน</div>
+        <div><span class="meta-label">วิธีชำระ:</span> ${methodDisplay}</div>
       </div>
     </div>
 
